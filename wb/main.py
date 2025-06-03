@@ -41,8 +41,15 @@ def make_app():
 
 def main():
     app = make_app()
-    app.listen(8000)
-    print("Serving HTTP on 0.0.0.0 port 8000 (http://0.0.0.0:8000/) ...")
-    tornado.ioloop.IOLoop.current().start()
+    port = 8000
+    while port<9000:
+        try:
+            app.listen(port)
+            print(f"Serving HTTP on 0.0.0.0 port {port} (http://0.0.0.0:{port}/) ...")
+            tornado.ioloop.IOLoop.current().start()
+            
+        except:
+            port+=1
+    
 if __name__ == "__main__":
     main()

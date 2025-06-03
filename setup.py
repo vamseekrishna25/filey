@@ -20,12 +20,11 @@ setup(
         ],
     },
     install_requires=parse_requirements('requirements.txt'),
-    author='Your Name',
-    author_email='your.email@example.com',
+    author='Viswantha Srinivas P',
+    author_email='',
     description='A simple directory listing application',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',
-    url='https://github.com/yourusername/wb',  # Replace with your project's URL
     classifiers=[
         'Programming Language :: Python :: 3',
         'License :: OSI Approved :: MIT License',
