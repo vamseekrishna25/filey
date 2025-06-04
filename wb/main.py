@@ -4,6 +4,7 @@ from typing import Optional
 
 import tornado.ioloop
 import tornado.web
+import socket
 
 # Generate a random token at startup
 ACCESS_TOKEN = os.environ.get('WB_ACCESS_TOKEN') or secrets.token_urlsafe(32)
@@ -52,20 +53,81 @@ class MainHandler(BaseHandler):
         if os.path.isdir(abspath):
             files = os.listdir(abspath)
             files.sort()
-            self.write("<html><body><h2>Directory listing for {}</h2><ul>".format(path or "/"))
+            self.write("""
+            <html>
+            <head>
+                <style>
+                    ul {
+                        list-style: none;
+                        padding: 0;
+                    }
+                    li {
+                        padding: 5px 0;
+                        display: flex;
+                        align-items: center;
+                    }
+                    li a {
+                        text-decoration: none;
+                        color: #0366d6;
+                    }
+                    li a:hover {
+                        text-decoration: underline;
+                    }
+                    .file-link {
+                        flex-grow: 1;
+                    }
+                    .download-btn {
+                        display: inline-flex;
+                        align-items: center;
+                        padding: 3px 8px;
+                        background-color: #4CAF50;
+                        color: white;
+                        text-decoration: none;
+                        border-radius: 4px;
+                        font-size: 12px;
+                        margin-left: auto;
+                    }
+                    .download-btn:hover {
+                        background-color: #45a049;
+                    }
+                </style>
+            </head>
+            <body>
+            """)
+            self.write("<h2>Directory listing for {}</h2><ul>".format(path or "/"))
             if path:
                 parent = os.path.dirname(path.rstrip("/"))
-                self.write(f'<li><a href="/{parent}">..</a></li>')
+                self.write(f'<li><a href="/{parent}" class="file-link">..</a></li>')
             for f in files:
                 full = os.path.join(path, f) if path else f
                 display = f + "/" if os.path.isdir(os.path.join(abspath, f)) else f
-                self.write(f'<li><a href="/{full}">{display}</a></li>')
+                self.write(f'<li><a href="/{full}" class="file-link">{display}</a>')
+                # Add download button only for files, not directories
+                if not os.path.isdir(os.path.join(abspath, f)):
+                    self.write(f'<a href="/{full}?download=1" class="download-btn">↓ Download</a>')
+                self.write('</li>')
             self.write("</ul></body></html>")
         elif os.path.isfile(abspath):
-            # Show file contents as plain text in the browser
-            self.set_header('Content-Type', 'text/plain; charset=utf-8')
-            with open(abspath, 'r', encoding='utf-8', errors='replace') as f:
-                self.write(f.read())
+            # Add option to view or download the file
+            filename = os.path.basename(abspath)
+            if self.get_argument('download', None):
+                # Force download the file
+                self.set_header('Content-Type', 'application/octet-stream')
+                self.set_header('Content-Disposition', f'attachment; filename="{filename}"')
+                with open(abspath, 'rb') as f:
+                    self.write(f.read())
+            else:
+                # Show file contents with download button
+                self.write("<html><body>")
+                self.write(f'<h2>{filename}</h2>')
+                self.write(f'<a href="/{path}?download=1" class="download-btn">Download</a>')
+                self.write('<hr>')
+                self.write('<pre>')
+                # Show file contents as plain text
+                with open(abspath, 'r', encoding='utf-8', errors='replace') as f:
+                    self.write(f.read())
+                self.write('</pre>')
+                self.write("</body></html>")
         else:
             self.set_status(404)
             self.write("File not found")
@@ -90,10 +152,10 @@ def main():
             print(settings,port)
             app.listen(port)
             print(f"Serving HTTP on 0.0.0.0 port {port} (http://0.0.0.0:{port}/) ...")
-
+            print(f"http://{socket.getfqdn()}:{port}/")
             tornado.ioloop.IOLoop.current().start()
             
-        except:
+        except OSError:
             port+=1
     
 if __name__ == "__main__":
