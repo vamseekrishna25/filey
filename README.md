@@ -1,28 +1,35 @@
-# Project Documentation
-
 # wb Package
 
-The `wb` package is a simple command-line tool that allows users to list the contents of the current directory.
+`wb` is a lightweight web-based file browser built on Tornado. It lets you browse and download files from a directory through a simple web interface protected by an access token.
 
 ## Installation
 
-To install the `wb` package, you can use the following command:
+Run the following command from the project root to install the package and its dependencies:
 
-```
+```bash
 pip install .
 ```
 
-Make sure you run this command in the root directory of the project where the `setup.py` file is located.
-
 ## Usage
 
-Once installed, you can use the package by running:
+Start the server using:
 
-```
-python -m wb
+```bash
+python -m wb [--port PORT] [--dir DIRECTORY]
 ```
 
-This command will list the contents of the current directory in the terminal.
+On startup a one-time access token is printed to the console. Navigate to `http://<host>:<port>/login` and provide this token to gain access. The default port range is 8000-9000 but you can specify a port with the `--port` flag or the `WB_PORT` environment variable. Use `--dir` (or `WB_DIR`) to serve a different directory.
+
+Once logged in you can browse directories, download files and upload new files from the `/upload` page.
+
+## Running Tests
+
+Install development requirements and run `pytest`:
+
+```bash
+pip install -r requirements.txt
+pytest
+```
 
 ## License
 
