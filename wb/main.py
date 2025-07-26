@@ -5,6 +5,11 @@ from typing import Optional
 import tornado.ioloop
 import tornado.web
 import socket
+import tornado.websocket
+import asyncio
+
+# Add this import for template path
+from tornado.web import RequestHandler, Application
 
 # Generate a random token at startup
 ACCESS_TOKEN = os.environ.get('WB_ACCESS_TOKEN') or secrets.token_urlsafe(32)
@@ -19,18 +24,7 @@ class LoginHandler(BaseHandler):
         if self.current_user:
             self.redirect("/")
             return
-        self.write('''
-        <html>
-            <head><title>Login</title></head>
-            <body>
-                <h2>Login</h2>
-                <form method="POST">
-                    <input type="password" name="token" placeholder="Enter access token">
-                    <input type="submit" value="Login">
-                </form>
-            </body>
-        </html>
-        ''')
+        self.render("login.html", error=None)  # Always provide 'error'
 
     def post(self):
         token = self.get_argument("token", "")
@@ -38,7 +32,7 @@ class LoginHandler(BaseHandler):
             self.set_secure_cookie("user", "authenticated")
             self.redirect("/")
         else:
-            self.write("<html><body>Invalid token. <a href='/login'>Try again</a></body></html>")
+            self.render("login.html", error="Invalid token. Try again.")
 
 class MainHandler(BaseHandler):
     @tornado.web.authenticated
@@ -53,89 +47,74 @@ class MainHandler(BaseHandler):
         if os.path.isdir(abspath):
             files = os.listdir(abspath)
             files.sort()
-            self.write("""
-            <html>
-            <head>
-                <style>
-                    ul {
-                        list-style: none;
-                        padding: 0;
-                    }
-                    li {
-                        padding: 5px 0;
-                        display: flex;
-                        align-items: center;
-                    }
-                    li a {
-                        text-decoration: none;
-                        color: #0366d6;
-                    }
-                    li a:hover {
-                        text-decoration: underline;
-                    }
-                    .file-link {
-                        flex-grow: 1;
-                    }
-                    .download-btn {
-                        display: inline-flex;
-                        align-items: center;
-                        padding: 3px 8px;
-                        background-color: #4CAF50;
-                        color: white;
-                        text-decoration: none;
-                        border-radius: 4px;
-                        font-size: 12px;
-                        margin-left: auto;
-                    }
-                    .download-btn:hover {
-                        background-color: #45a049;
-                    }
-                </style>
-            </head>
-            <body>
-            """)
-            self.write("<h2>Directory listing for {}</h2><ul>".format(path or "/"))
-            if path:
-                parent = os.path.dirname(path.rstrip("/"))
-                self.write(f'<li><a href="/{parent}" class="file-link">..</a></li>')
-            for f in files:
-                full = os.path.join(path, f) if path else f
-                display = f + "/" if os.path.isdir(os.path.join(abspath, f)) else f
-                self.write(f'<li><a href="/{full}" class="file-link">{display}</a>')
-                # Add download button only for files, not directories
-                if not os.path.isdir(os.path.join(abspath, f)):
-                    self.write(f'<a href="/{full}?download=1" class="download-btn">↓ Download</a>')
-                self.write('</li>')
-            self.write("</ul></body></html>")
+            file_data = []
+            for f_name in files:
+                file_data.append({
+                    'name': f_name,
+                    'is_dir': os.path.isdir(os.path.join(abspath, f_name))
+                })
+            self.render("directory.html", path=path, files=file_data)
         elif os.path.isfile(abspath):
-            # Add option to view or download the file
             filename = os.path.basename(abspath)
             if self.get_argument('download', None):
-                # Force download the file
                 self.set_header('Content-Type', 'application/octet-stream')
                 self.set_header('Content-Disposition', f'attachment; filename="{filename}"')
                 with open(abspath, 'rb') as f:
                     self.write(f.read())
             else:
-                # Show file contents with download button
-                self.write("<html><body>")
-                self.write(f'<h2>{filename}</h2>')
-                self.write(f'<a href="/{path}?download=1" class="download-btn">Download</a>')
-                self.write('<hr>')
-                self.write('<pre>')
-                # Show file contents as plain text
                 with open(abspath, 'r', encoding='utf-8', errors='replace') as f:
-                    self.write(f.read())
-                self.write('</pre>')
-                self.write("</body></html>")
+                    file_content = f.read()
+                self.render("file.html", filename=filename, path=path, file_content=file_content)
         else:
             self.set_status(404)
             self.write("File not found")
 
+class FileStreamHandler(tornado.websocket.WebSocketHandler):
+    def check_origin(self, origin):
+        return True  # Allow all origins for now
+
+    async def open(self, path):
+        self.file_path = os.path.abspath(os.path.join(os.getcwd(), path))
+        self.running = True
+        if not os.path.isfile(self.file_path):
+            await self.write_message(f"File not found: {self.file_path}")
+            self.close()
+            return
+        try:
+            self.file = open(self.file_path, 'r', encoding='utf-8', errors='replace')
+            self.file.seek(0, os.SEEK_END)  # Start at end of file
+        except Exception as e:
+            await self.write_message(f"Error opening file: {e}")
+            self.close()
+            return
+        self.loop = tornado.ioloop.IOLoop.current()
+        self.periodic = tornado.ioloop.PeriodicCallback(self.send_new_lines, 500)
+        self.periodic.start()
+
+    async def send_new_lines(self):
+        if not self.running:
+            return
+        where = self.file.tell()
+        line = self.file.readline()
+        while line:
+            await self.write_message(line)
+            where = self.file.tell()
+            line = self.file.readline()
+        self.file.seek(where)
+
+    def on_close(self):
+        self.running = False
+        if hasattr(self, 'periodic'):
+            self.periodic.stop()
+        if hasattr(self, 'file'):
+            self.file.close()
+
 def make_app(settings):
-   
+    # Add template_path to settings
+    settings["template_path"] = os.path.join(os.path.dirname(__file__), "templates")
     return tornado.web.Application([
         (r"/login", LoginHandler),
+        (r"/stream/(.*)", FileStreamHandler),
         (r"/(.*)", MainHandler),
     ], **settings)
 

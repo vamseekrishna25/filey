@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>{{ filename }}</title>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+            font-family: monospace;
+        }
+        .download-btn, button {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            background-color: white;
+            color: black;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: 5px;
+            border: 1px solid black;
+            font-family: monospace;
+        }
+        .download-btn:hover, button:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h2>{{ filename }}</h2>
+    <a href="/{{ path }}?download=1" class="download-btn">Download</a>
+    <button id="stream-btn">Stream</button>
+    <button id="stop-stream-btn" style="display:none;">Stop Streaming</button>
+    <hr>
+    <pre id="file-content">{{ file_content }}</pre>
+    <script>
+    const streamBtn = document.getElementById('stream-btn');
+    const stopStreamBtn = document.getElementById('stop-stream-btn');
+    const pre = document.getElementById('file-content');
+    let ws = null;
+    let originalContent = pre.textContent;
+    streamBtn.onclick = function() {
+        ws = new WebSocket(`ws://${window.location.host}/stream/{{ path }}`);
+        pre.textContent = '';
+        streamBtn.style.display = 'none';
+        stopStreamBtn.style.display = '';
+        ws.onmessage = function(event) {
+            pre.textContent += event.data;
+            pre.scrollTop = pre.scrollHeight;
+        };
+        ws.onclose = function() {
+            stopStreamBtn.style.display = 'none';
+            streamBtn.style.display = '';
+        };
+    };
+    stopStreamBtn.onclick = function() {
+        if (ws) {
+            ws.close();
+            ws = null;
+        }
+        pre.textContent = originalContent;
+        stopStreamBtn.style.display = 'none';
+        streamBtn.style.display = '';
+    };
+    </script>
+</body>
+</html> 

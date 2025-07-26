@@ -1,0 +1,64 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Directory listing</title>
+    <style>
+        body {
+            background-color: white;
+            color: black;
+            font-family: monospace;
+        }
+        ul {
+            list-style: none;
+            padding: 0;
+        }
+        li {
+            padding: 5px 0;
+            display: flex;
+            align-items: center;
+        }
+        li a {
+            text-decoration: none;
+            color: black;
+        }
+        li a:hover {
+            text-decoration: underline;
+        }
+        .file-link {
+            flex-grow: 1;
+        }
+        .download-btn {
+            display: inline-flex;
+            align-items: center;
+            padding: 3px 8px;
+            background-color: white;
+            color: black;
+            text-decoration: none;
+            border-radius: 4px;
+            font-size: 12px;
+            margin-left: auto;
+            border: 1px solid black;
+        }
+        .download-btn:hover {
+            background-color: #f0f0f0;
+        }
+    </style>
+</head>
+<body>
+    <h2>Directory listing for {{ path or '/' }}</h2>
+    <ul>
+        {% if path %}
+            <li><a href="/{{ path.rsplit('/', 1)[0] }}" class="file-link">..</a></li>
+        {% end %}
+        {% for f in files %}
+            {% set full = (path + '/' + f['name']) if path else f['name'] %}
+            <li>
+                <a href="/{{ full }}" class="file-link">{{ f['name'] + '/' if f['is_dir'] else f['name'] }}</a>
+                {% if not f['is_dir'] %}
+                    <a href="/{{ full }}?download=1" class="download-btn">&#8595; Download</a>
+                {% end %}
+            </li>
+        {% end %}
+    </ul>
+</body>
+</html> 
