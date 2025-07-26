@@ -39,6 +39,7 @@
     const pre = document.getElementById('file-content');
     let ws = null;
     let originalContent = pre.textContent;
+
     streamBtn.onclick = function() {
         ws = new WebSocket(`ws://${window.location.host}/stream/{{ path }}`);
         pre.textContent = '';
@@ -62,6 +63,13 @@
         stopStreamBtn.style.display = 'none';
         streamBtn.style.display = '';
     };
+
+    document.addEventListener('DOMContentLoaded', function() {
+        const urlParams = new URLSearchParams(window.location.search);
+        if (urlParams.has('stream')) {
+            streamBtn.click();
+        }
+    });
     </script>
 </body>
 </html> 
