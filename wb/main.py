@@ -72,10 +72,17 @@ class MainHandler(BaseHandler):
             self.write("File not found")
 
 class FileStreamHandler(tornado.websocket.WebSocketHandler):
+    def get_current_user(self) -> Optional[str]:
+        return self.get_secure_cookie("user")
+
     def check_origin(self, origin):
         return True  # Allow all origins for now
 
     async def open(self, path):
+        if not self.current_user:
+            self.close()
+            return
+            
         self.file_path = os.path.abspath(os.path.join(os.getcwd(), path))
         self.running = True
         if not os.path.isfile(self.file_path):
