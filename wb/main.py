@@ -1,5 +1,7 @@
 import os
 import secrets
+import argparse
+import json
 from typing import Optional
 
 import tornado.ioloop
@@ -7,14 +9,15 @@ import tornado.web
 import socket
 import tornado.websocket
 import asyncio
+import shutil
 from collections import deque
 
 # Add this import for template path
 from tornado.web import RequestHandler, Application
 
-# Generate a random token at startup
-ACCESS_TOKEN = os.environ.get('WB_ACCESS_TOKEN') or secrets.token_urlsafe(32)
-print(f"Access token: {ACCESS_TOKEN}")
+# Will be set in main() after parsing configuration
+ACCESS_TOKEN = None
+ROOT_DIR = os.getcwd()
 
 class BaseHandler(tornado.web.RequestHandler):
     def get_current_user(self) -> Optional[str]:
@@ -38,8 +41,8 @@ class LoginHandler(BaseHandler):
 class MainHandler(BaseHandler):
     @tornado.web.authenticated
     def get(self, path):
-        abspath = os.path.abspath(os.path.join(os.getcwd(), path))
-        root = os.getcwd()
+        abspath = os.path.abspath(os.path.join(ROOT_DIR, path))
+        root = ROOT_DIR
         if not abspath.startswith(root):
             self.set_status(403)
             self.write("Forbidden")
@@ -83,7 +86,7 @@ class FileStreamHandler(tornado.websocket.WebSocketHandler):
             self.close()
             return
             
-        self.file_path = os.path.abspath(os.path.join(os.getcwd(), path))
+        self.file_path = os.path.abspath(os.path.join(ROOT_DIR, path))
         self.running = True
         if not os.path.isfile(self.file_path):
             await self.write_message(f"File not found: {self.file_path}")
@@ -138,8 +141,8 @@ class UploadHandler(BaseHandler):
         if not file_infos:
             file_info = self.request.files.get('file', [])[0]
             filename = file_info['filename']
-            upload_path = os.path.join(os.getcwd(), directory)
-            if not os.path.abspath(upload_path).startswith(os.getcwd()):
+            upload_path = os.path.join(ROOT_DIR, directory)
+            if not os.path.abspath(upload_path).startswith(ROOT_DIR):
                 self.set_status(403)
                 self.write("Forbidden")
                 return
@@ -156,10 +159,10 @@ class UploadHandler(BaseHandler):
             
             # Sanitize the relative path to prevent directory traversal
             # and ensure it's a safe path
-            final_path = os.path.join(os.getcwd(), directory, relative_path)
+            final_path = os.path.join(ROOT_DIR, directory, relative_path)
             final_path_abs = os.path.abspath(final_path)
 
-            if not final_path_abs.startswith(os.path.abspath(os.path.join(os.getcwd(), directory))):
+            if not final_path_abs.startswith(os.path.abspath(os.path.join(ROOT_DIR, directory))):
                 self.set_status(403)
                 self.write(f"Forbidden path: {relative_path}")
                 return
@@ -172,6 +175,39 @@ class UploadHandler(BaseHandler):
         self.set_status(200)
         self.write("Upload successful")
 
+class DeleteHandler(BaseHandler):
+    @tornado.web.authenticated
+    def post(self):
+        path = self.get_argument("path", "")
+        abspath = os.path.abspath(os.path.join(ROOT_DIR, path))
+        root = ROOT_DIR
+        if not abspath.startswith(root):
+            self.set_status(403)
+            self.write("Forbidden")
+            return
+        if os.path.isdir(abspath):
+            shutil.rmtree(abspath)
+        elif os.path.isfile(abspath):
+            os.remove(abspath)
+        parent = os.path.dirname(path)
+        self.redirect("/" + parent if parent else "/")
+
+class RenameHandler(BaseHandler):
+    @tornado.web.authenticated
+    def post(self):
+        path = self.get_argument("path", "")
+        new_name = self.get_argument("new_name", "")
+        abspath = os.path.abspath(os.path.join(ROOT_DIR, path))
+        new_abspath = os.path.abspath(os.path.join(ROOT_DIR, os.path.dirname(path), new_name))
+        root = ROOT_DIR
+        if not (abspath.startswith(root) and new_abspath.startswith(root)):
+            self.set_status(403)
+            self.write("Forbidden")
+            return
+        os.rename(abspath, new_abspath)
+        parent = os.path.dirname(path)
+        self.redirect("/" + parent if parent else "/")
+
 def make_app(settings):
     # Add template_path to settings
     settings["template_path"] = os.path.join(os.path.dirname(__file__), "templates")
@@ -179,27 +215,49 @@ def make_app(settings):
         (r"/login", LoginHandler),
         (r"/stream/(.*)", FileStreamHandler),
         (r"/upload", UploadHandler),
+        (r"/delete", DeleteHandler),
+        (r"/rename", RenameHandler),
         (r"/(.*)", MainHandler),
     ], **settings)
 
 
 def main():
+    parser = argparse.ArgumentParser(description="Run Filey")
+    parser.add_argument("--config", help="Path to JSON config file")
+    parser.add_argument("--root", help="Root directory to serve")
+    parser.add_argument("--port", type=int, help="Port to listen on")
+    parser.add_argument("--token", help="Access token for login")
+    args = parser.parse_args()
+
+    config = {}
+    if args.config:
+        with open(args.config) as f:
+            config = json.load(f)
+
+    root = args.root or config.get("root") or os.getcwd()
+    port = args.port or config.get("port") or 8000
+    token = args.token or config.get("token") or os.environ.get("WB_ACCESS_TOKEN") or secrets.token_urlsafe(32)
+
+    global ACCESS_TOKEN, ROOT_DIR
+    ACCESS_TOKEN = token
+    ROOT_DIR = os.path.abspath(root)
+
+    print(f"Access token: {ACCESS_TOKEN}")
+
     settings = {
         "cookie_secret": ACCESS_TOKEN,
         "login_url": "/login",
     }
     app = make_app(settings)
-    port = 8000
-    while port<9000:
+    while True:
         try:
-            print(settings,port)
             app.listen(port)
             print(f"Serving HTTP on 0.0.0.0 port {port} (http://0.0.0.0:{port}/) ...")
             print(f"http://{socket.getfqdn()}:{port}/")
             tornado.ioloop.IOLoop.current().start()
-            
+            break
         except OSError:
-            port+=1
+            port += 1
     
 if __name__ == "__main__":
     main()
