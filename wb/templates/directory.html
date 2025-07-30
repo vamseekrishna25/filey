@@ -31,7 +31,7 @@
             margin-left: auto;
             display: flex;
         }
-        .download-btn, .stream-btn {
+        .download-btn, .stream-btn, .rename-btn, .delete-btn {
             display: inline-flex;
             align-items: center;
             padding: 3px 8px;
@@ -43,7 +43,7 @@
             border: 1px solid black;
             margin-left: 5px;
         }
-        .download-btn:hover, .stream-btn:hover {
+        .download-btn:hover, .stream-btn:hover, .rename-btn:hover, .delete-btn:hover {
             background-color: #f0f0f0;
         }
         .stream-btn {
@@ -85,12 +85,14 @@
             {% set full = (path + '/' + f['name']) if path else f['name'] %}
             <li>
                 <a href="/{{ full }}" class="file-link">{{ f['name'] + '/' if f['is_dir'] else f['name'] }}</a>
-                {% if not f['is_dir'] %}
-                    <div class="file-actions">
+                <div class="file-actions">
+                    {% if not f['is_dir'] %}
                         <a href="/{{ full }}?stream=1" class="stream-btn">Stream</a>
                         <a href="/{{ full }}?download=1" class="download-btn">&#8595; Download</a>
-                    </div>
-                {% end %}
+                    {% end %}
+                    <button class="rename-btn" onclick="renameItem('{{ full }}')">Rename</button>
+                    <button class="delete-btn" onclick="deleteItem('{{ full }}')">Delete</button>
+                </div>
             </li>
         {% end %}
     </ul>
@@ -155,6 +157,24 @@
                 });
             });
         });
+
+        function deleteItem(path) {
+            if (!confirm('Delete ' + path + '?')) return;
+            const formData = new FormData();
+            formData.append('path', path);
+            fetch('/delete', { method: 'POST', body: formData })
+                .then(() => window.location.reload());
+        }
+
+        function renameItem(path) {
+            const newName = prompt('Rename ' + path.split('/').pop() + ' to:');
+            if (!newName) return;
+            const formData = new FormData();
+            formData.append('path', path);
+            formData.append('new_name', newName);
+            fetch('/rename', { method: 'POST', body: formData })
+                .then(() => window.location.reload());
+        }
 
         function traverseFileTree(item, path) {
             return new Promise((resolve) => {

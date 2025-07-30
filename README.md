@@ -8,6 +8,8 @@ Filey is a lightweight, web-based file browser built with Python and Tornado. It
 - **Drag-and-Drop Uploads:** Easily upload files and entire folder structures by dragging them into the browser window.
 - **Real-Time File Streaming:** Open any file in streaming mode to see new lines appended in real-time, perfect for monitoring logs or other active files. The stream will also show the last 100 lines for immediate context.
 - **Secure Access:** The entire application is protected by a token-based authentication system.
+- **Rename & Delete:** Quickly rename or remove files and folders directly from the directory listing.
+- **Configurable:** Specify the root directory, port, and token via a JSON config file or command-line options.
 
 ## Setup and Installation
 
@@ -18,16 +20,17 @@ Filey is a lightweight, web-based file browser built with Python and Tornado. It
 
 2.  **Run the Application:**
     ```bash
-    python -m wb
+    python -m wb --root /path/to/serve --port 8000 --token YOUR_TOKEN
     ```
-    Upon starting, a unique access token will be printed to the console. Use this token to log in. The application will be served on `http://localhost:8000` by default.
+    You can also create a JSON file with `root`, `port`, and `token` keys and pass it using `--config config.json`.
+    If no token is provided, a random one will be generated and printed to the console.
 
 ## Endpoints
 
 All endpoints (except the login page itself) require a valid authentication token, which is set as a secure cookie upon login.
 
 ### `GET /`
-- **Description:** The main endpoint for browsing files and directories. It displays the contents of the current working directory.
+- **Description:** The main endpoint for browsing files and directories. It displays the contents of the configured root directory.
 - **Usage:** Navigate to the root URL to start browsing.
 
 ### `GET /<path:path>`
@@ -49,6 +52,16 @@ All endpoints (except the login page itself) require a valid authentication toke
 - **Description:** Handles file and folder uploads. This endpoint is used by the drag-and-drop interface.
 - **Body:** `multipart/form-data` containing the files and the target directory.
 - **Usage:** Drag files/folders into the drop zone on the directory listing page. The frontend handles the request automatically.
+
+### `POST /delete`
+- **Description:** Deletes a file or directory.
+- **Body:** `path=<target_path>`
+- **Usage:** Triggered via the "Delete" button next to each item in the directory listing.
+
+### `POST /rename`
+- **Description:** Renames a file or directory.
+- **Body:** `path=<target_path>&new_name=<new_name>`
+- **Usage:** Triggered via the "Rename" button next to each item in the directory listing.
 
 ### `WS /stream/<path:path>`
 - **Description:** A WebSocket endpoint for real-time file streaming.
