@@ -2,7 +2,10 @@ import os
 import secrets
 import argparse
 import json
-from typing import Optional
+from typing import TYPE_CHECKING
+ 
+ if TYPE_CHECKING:
+     from typing import Optional
 
 import tornado.ioloop
 import tornado.web
@@ -20,7 +23,7 @@ ACCESS_TOKEN = None
 ROOT_DIR = os.getcwd()
 
 class BaseHandler(tornado.web.RequestHandler):
-    def get_current_user(self) -> Optional[str]:
+    def get_current_user(self) -> str | None:
         return self.get_secure_cookie("user")
 
 class LoginHandler(BaseHandler):
@@ -75,7 +78,7 @@ class MainHandler(BaseHandler):
             self.write("File not found")
 
 class FileStreamHandler(tornado.websocket.WebSocketHandler):
-    def get_current_user(self) -> Optional[str]:
+    def get_current_user(self) -> str | None:
         return self.get_secure_cookie("user")
 
     def check_origin(self, origin):

@@ -14,9 +14,10 @@ setup(
     name='wb',
     version='0.1',
     packages=find_packages(),
+    package_data={'wb': ['templates/*.html']},
     entry_points={
         'console_scripts': [
-            'wb=wb.main',
+            'wb=wb.main:main',
         ],
     },
     install_requires=parse_requirements('requirements.txt'),
@@ -30,5 +31,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Operating System :: OS Independent',
     ],
-    python_requires='>=3.6',
+    python_requires='>=3.10',
 )
